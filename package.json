@@ -11,6 +11,10 @@
   "author": "",
   "license": "UNLICENSED",
   "description": "Web-based Game Boy Color player with a live Pokémon companion panel.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/klangwiedergabe/pokpanion.git"
+  },
   "dependencies": {
     "wasmboy": "^0.7.1"
   },
