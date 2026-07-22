@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+
+# Nunca commitear ROMs ni guardados — son del usuario, no del repo.
+*.gb
+*.gbc
+*.sav
+*.srm

@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GBC Web Player</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #14141c;
+        color: #eee;
+        font-family: monospace;
+      }
+      #layout {
+        display: flex;
+        justify-content: center;
+        padding: 24px;
+      }
+      #player {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+      #screen-wrap {
+        width: min(480px, 92vw);
+        aspect-ratio: 480 / 432;
+        background: #000;
+        border: 4px solid #444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      button,
+      input[type="file"] {
+        font-family: inherit;
+        font-size: 13px;
+        background: #2a2a3a;
+        color: #eee;
+        border: 1px solid #555;
+        border-radius: 4px;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #3a3a4e;
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      #status {
+        font-size: 11px;
+        color: #9aa0a8;
+        min-height: 14px;
+        margin-top: 10px;
+      }
+      #advisor {
+        width: min(480px, 92vw);
+        min-height: 54px;
+      }
+
+      /* Joystick táctil: solo se muestra (display:flex, vía JS) en
+         dispositivos táctiles sin teclado. Cruceta a la izquierda, A/B en
+         diamante a la derecha, Select/Start chicos al medio — layout
+         clásico de Game Boy. */
+      #touch-controls {
+        display: none;
+        width: min(480px, 92vw);
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 4px;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: none;
+      }
+      .tc-btn,
+      .tc-face-btn,
+      .tc-pill {
+        background: #2a2a3a;
+        border: 1px solid #555;
+        color: #eee;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.05s ease, background 0.05s ease;
+      }
+      .tc-btn.pressed,
+      .tc-face-btn.pressed,
+      .tc-pill.pressed {
+        background: #4a4a62;
+        transform: scale(0.92);
+      }
+      .tc-dpad {
+        display: grid;
+        grid-template-columns: 44px 44px 44px;
+        grid-template-rows: 44px 44px 44px;
+        gap: 2px;
+      }
+      .tc-btn {
+        border-radius: 6px;
+        font-size: 16px;
+      }
+      .tc-up {
+        grid-column: 2;
+        grid-row: 1;
+      }
+      .tc-left {
+        grid-column: 1;
+        grid-row: 2;
+      }
+      .tc-right {
+        grid-column: 3;
+        grid-row: 2;
+      }
+      .tc-down {
+        grid-column: 2;
+        grid-row: 3;
+      }
+      .tc-mid {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .tc-pill {
+        border-radius: 20px;
+        padding: 6px 10px;
+        font-size: 10px;
+      }
+      .tc-face {
+        position: relative;
+        width: 120px;
+        height: 92px;
+      }
+      .tc-face-btn {
+        position: absolute;
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        font-size: 15px;
+        font-weight: bold;
+      }
+      .tc-b {
+        left: 0;
+        bottom: 0;
+      }
+      .tc-a {
+        right: 0;
+        top: 0;
+      }
+      #party-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 12px;
+      }
+      #companion-empty {
+        font-size: 12px;
+        color: #777;
+      }
+      #controls {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 10px;
+        font-size: 12px;
+        background: #14141c;
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: 10px 14px;
+      }
+      #controls .key {
+        font-family: inherit;
+        background: #2a2a3a;
+        border: 1px solid #555;
+        border-radius: 4px;
+        padding: 1px 8px;
+        text-align: center;
+        white-space: nowrap;
+      }
+      #controls .desc {
+        color: #b5bac1;
+      }
+
+      /* Botón flotante estilo pokébola: abre/cierra el menú, y el ícono
+         mismo rota/cross-fadea a una X cuando está abierto. */
+      #menu-toggle {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        border: none;
+        background: #fff;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        z-index: 30;
+        transition: transform 0.15s ease;
+      }
+      #menu-toggle:hover {
+        transform: scale(1.06);
+      }
+      #menu-toggle svg {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        transition: opacity 0.2s ease, transform 0.25s ease;
+      }
+      #menu-toggle .icon-close {
+        opacity: 0;
+        transform: rotate(-90deg) scale(0.5);
+      }
+      #menu-toggle.open .icon-pokeball {
+        opacity: 0;
+        transform: rotate(90deg) scale(0.5);
+      }
+      #menu-toggle.open .icon-close {
+        opacity: 1;
+        transform: rotate(0deg) scale(1);
+      }
+
+      #menu-panel {
+        position: fixed;
+        bottom: 92px;
+        right: 24px;
+        width: 320px;
+        max-height: 75vh;
+        overflow-y: auto;
+        background: #1c1c28;
+        border: 1px solid #333;
+        border-radius: 10px;
+        padding: 16px;
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+        z-index: 25;
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+        pointer-events: none;
+        transition: opacity 0.16s ease, transform 0.16s ease;
+      }
+      #menu-panel.open {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+      }
+      #menu-panel h2 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+      #menu-panel hr {
+        border: none;
+        border-top: 1px solid #333;
+        margin: 14px 0;
+      }
+      #lang-switch button.active {
+        background: #3f6ea5;
+        border-color: #6ea0e0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="layout">
+      <div id="player">
+        <div id="screen-wrap">
+          <canvas id="gb-canvas" width="160" height="144"></canvas>
+        </div>
+        <div id="advisor" style="display: none"></div>
+        <div id="touch-controls">
+          <div class="tc-dpad">
+            <button class="tc-btn tc-up" data-button="up" data-i18n-aria-label="dpadUp">▲</button>
+            <button class="tc-btn tc-left" data-button="left" data-i18n-aria-label="dpadLeft">◀</button>
+            <button class="tc-btn tc-right" data-button="right" data-i18n-aria-label="dpadRight">▶</button>
+            <button class="tc-btn tc-down" data-button="down" data-i18n-aria-label="dpadDown">▼</button>
+          </div>
+          <div class="tc-mid">
+            <button class="tc-pill" data-button="select" aria-label="Select">SELECT</button>
+            <button class="tc-pill" data-button="start" aria-label="Start">START</button>
+          </div>
+          <div class="tc-face">
+            <button class="tc-face-btn tc-b" data-button="b" aria-label="B">B</button>
+            <button class="tc-face-btn tc-a" data-button="a" aria-label="A">A</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button id="menu-toggle" data-i18n-aria-label="menuToggleOpen" aria-expanded="false">
+      <svg class="icon-pokeball" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="45" fill="#fff" stroke="#222" stroke-width="4" />
+        <path d="M5 50a45 45 0 0 1 90 0z" fill="#e3350d" />
+        <rect x="5" y="47" width="90" height="6" fill="#222" />
+        <circle cx="50" cy="50" r="13" fill="#fff" stroke="#222" stroke-width="4" />
+        <circle cx="50" cy="50" r="5" fill="#fff" stroke="#222" stroke-width="3" />
+      </svg>
+      <svg class="icon-close" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <line x1="5" y1="5" x2="19" y2="19" stroke="#222" stroke-width="2.5" stroke-linecap="round" />
+        <line x1="19" y1="5" x2="5" y2="19" stroke="#222" stroke-width="2.5" stroke-linecap="round" />
+      </svg>
+    </button>
+
+    <div id="menu-panel">
+      <div id="lang-switch" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 11px; color: #9aa0a8">
+        <span data-i18n="languageLabel">Idioma</span>
+        <div class="row" style="gap: 4px">
+          <button id="lang-es" data-lang="es" style="padding: 3px 8px; font-size: 11px">ES</button>
+          <button id="lang-en" data-lang="en" style="padding: 3px 8px; font-size: 11px">EN</button>
+        </div>
+      </div>
+
+      <h2 data-i18n="teamHeading">Tu equipo</h2>
+      <div id="party-list">
+        <div id="companion-empty" data-i18n="companionEmpty">Cargá una partida para ver tu equipo.</div>
+      </div>
+
+      <hr />
+
+      <div id="setup-panel" class="row" style="flex-direction: column; align-items: stretch; gap: 8px">
+        <div style="font-size: 12px">
+          <label style="display: block; margin-bottom: 4px" data-i18n="romLabel">ROM (.gb / .gbc) — obligatorio</label>
+          <input type="file" id="rom-input" accept=".gb,.gbc" />
+        </div>
+        <div style="font-size: 12px">
+          <label style="display: block; margin-bottom: 4px" data-i18n="savLabel">Guardado (.sav) — opcional</label>
+          <input type="file" id="sav-input" accept=".sav,.srm" />
+        </div>
+        <div style="font-size: 11px; color: #9aa0a8" data-i18n="savHint">Si no elegís un .sav, arranca una partida nueva desde cero.</div>
+        <button id="btn-start" disabled data-i18n="btnStart">Comenzar</button>
+      </div>
+
+      <div id="play-controls" style="display: none; flex-direction: column; align-items: center; gap: 12px">
+        <div class="row">
+          <button id="btn-play">Play</button>
+          <button id="btn-pause">Pause</button>
+          <button id="btn-reset">Reset</button>
+        </div>
+        <div id="controls">
+          <div class="key">↑ ↓ ← → / W A S D</div>
+          <div class="desc" data-i18n="controlsMoveDesc">Moverte / elegir en menús</div>
+          <div class="key">Z</div>
+          <div class="desc" data-i18n="controlsADesc">A — confirmar, hablar, avanzar diálogo</div>
+          <div class="key">X</div>
+          <div class="desc" data-i18n="controlsBDesc">B — cancelar, cerrar menú, acelerar texto</div>
+          <div class="key">Enter</div>
+          <div class="desc" data-i18n="controlsStartDesc">Start — abrir menú principal</div>
+          <div class="key">Shift</div>
+          <div class="desc" data-i18n="controlsSelectDesc">Select — casi sin uso en este juego</div>
+        </div>
+        <div class="row" style="flex-direction: column; align-items: center; gap: 4px">
+          <div style="font-size: 11px; color: #9aa0a8" data-i18n="savPortableLabel">Guardado portable (.sav — funciona en cualquier emulador)</div>
+          <button id="btn-export-sav" data-i18n="btnExportSav">Descargar .sav</button>
+          <div style="font-size: 11px; color: #9aa0a8" data-i18n="savReloadHint">Para cargar otro save: recargá la página (F5) y adjuntalo acá.</div>
+        </div>
+      </div>
+
+      <div id="status" data-i18n="statusInitial">Elegí tu ROM (y opcionalmente un .sav) para empezar.</div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
